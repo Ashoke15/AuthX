@@ -8,6 +8,7 @@ import (
 
 	"github.com/Ashoke15/AuthX/internal/auth"
 	"github.com/Ashoke15/AuthX/internal/repository"
+	"github.com/Ashoke15/AuthX/internal/validation"
 )
 
 type LoginHandler struct {
@@ -39,8 +40,13 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 
-	if req.Email == "" || req.Password == "" {
-		writeError(w, http.StatusBadRequest, "email and password are required")
+	if err := validation.ValidateEmail(req.Email); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if req.Password == "" {
+		writeError(w, http.StatusBadRequest, "password is required")
 		return
 	}
 

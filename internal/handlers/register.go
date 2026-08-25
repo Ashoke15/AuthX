@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/mail"
 	"strings"
 	"time"
 
 	"github.com/Ashoke15/AuthX/internal/auth"
 	"github.com/Ashoke15/AuthX/internal/models"
 	"github.com/Ashoke15/AuthX/internal/repository"
+	"github.com/Ashoke15/AuthX/internal/validation"
 	"github.com/google/uuid"
 )
 
@@ -79,16 +79,12 @@ func (h *RegisterHandeler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateRegisterRequest(req registerRequest) error {
-	if req.Email == "" || req.Password == "" {
-		return errors.New("email and password are required")
+	if err := validation.ValidateEmail(req.Email); err != nil {
+		return err
 	}
 
-	if _, err := mail.ParseAddress(req.Email); err != nil {
-		return errors.New("invalid email format")
-	}
-
-	if len(req.Password) < 8 {
-		return errors.New("passwored must be 8 characters")
+	if err := validation.ValidatePassword(req.Password); err != nil {
+		return err
 	}
 
 	return nil
