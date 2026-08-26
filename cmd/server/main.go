@@ -24,8 +24,10 @@ func main() {
 	defer conn.Close()
 
 	userRepo := repository.NPURepository(conn)
+	refreshRepo := repository.NPRTRepositry(conn)
 	registerHandeler := handlers.NewRegisterHandeler(userRepo)
-	loginHandler := handlers.NewLoginHandler(userRepo, cfg.JWTSecret)
+	loginHandler := handlers.NewLoginHandler(userRepo, refreshRepo, cfg.JWTSecret)
+	refreshHandler := handlers.NewRefreshHandeler(refreshRepo, cfg.JWTSecret)
 	meHandler := handlers.NewMeHandler(userRepo)
 
 	r := chi.NewRouter()
@@ -34,6 +36,7 @@ func main() {
 
 	r.Post("/register", registerHandeler.ServeHTTP)
 	r.Post("/login", loginHandler.ServeHTTP)
+	r.Post("/refresh", refreshHandler.ServeHTTP)
 
 	r.Group(func(protect chi.Router) {
 		protect.Use(authmw.RequireAuth(cfg.JWTSecret))

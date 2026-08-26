@@ -5,19 +5,23 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Ashoke15/AuthX/internal/auth"
+	"github.com/Ashoke15/AuthX/internal/models"
 	"github.com/Ashoke15/AuthX/internal/repository"
 	"github.com/Ashoke15/AuthX/internal/validation"
+	"github.com/google/uuid"
 )
 
 type LoginHandler struct {
-	repo      repository.UserReposerty
-	JwtSecret string
+	userRepo    repository.UserReposerty
+	refreshRepo repository.RefreshTokenRepository
+	JwtSecret   string
 }
 
-func NewLoginHandler(repo repository.UserReposerty, jwtSecret string) *LoginHandler {
-	return &LoginHandler{repo: repo, JwtSecret: jwtSecret}
+func NewLoginHandler(repo repository.UserReposerty, refreshRepo repository.RefreshTokenRepository, jwtSecret string) *LoginHandler {
+	return &LoginHandler{userRepo: repo, refreshRepo: refreshRepo, JwtSecret: jwtSecret}
 }
 
 type loginRequest struct {
@@ -26,8 +30,9 @@ type loginRequest struct {
 }
 
 type loginResponce struct {
-	AccessToken string `json:"access_token"`
-	ExpiresIn   int    `json:"expires_in"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
 }
 
 func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +55,7 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.repo.GetByEmail(req.Email)
+	user, err := h.userRepo.GetByEmail(req.Email)
 	if err != nil {
 		if errors.Is(err, repository.ErrUserNotFound) {
 			writeError(w, http.StatusUnauthorized, "invalid email and password")
@@ -71,8 +76,27 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	refreshPlain, err := auth.GenerateRefreshToken()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not generate refresh token")
+		return
+	}
+
+	refreshToken := &models.RefreshToken{
+		Id:         uuid.NewString(),
+		UserId:     user.Id,
+		TokenHash:  auth.HashRefreashToken(refreshPlain),
+		ExpairesAt: time.Now().Add(auth.RefreshTokenTTL),
+	}
+
+	if err := h.refreshRepo.Create(refreshToken); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not store refresh token")
+		return
+	}
+
 	writeJson(w, http.StatusOK, loginResponce{
-		AccessToken: token,
-		ExpiresIn:   int(auth.AccessTokenTTL.Seconds()),
+		AccessToken:  token,
+		RefreshToken: refreshPlain,
+		ExpiresIn:    int(auth.AccessTokenTTL.Seconds()),
 	})
 }

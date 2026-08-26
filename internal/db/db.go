@@ -32,7 +32,16 @@ func migrate(conn *sql.DB) error {
 		email_verified BOOLEAN NOT NULL DEFAULT FALSE,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-	);	
+	);
+	
+	CREATE TABLE IF NOT EXISTS refresh_tokens (
+		id UUID PRIMARY KEY,
+		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		token_hash TEXT UNIQUE NOT NULL,
+		expires_at TIMESTAMPTZ NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		revoked_at TIMESTAMPTZ
+	);
 	`
 	_, err := conn.Exec(schema)
 	return err
