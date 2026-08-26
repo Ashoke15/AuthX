@@ -16,6 +16,7 @@ var (
 type UserReposerty interface {
 	Create(u *models.User) error
 	GetByEmail(email string) (*models.User, error)
+	GetBYId(id string) (*models.User, error)
 }
 
 type PURepository struct {
@@ -52,6 +53,26 @@ func (r *PURepository) GetByEmail(email string) (*models.User, error) {
 	)
 
 	var u models.User
+	err := row.Scan(&u.Id, &u.Email, &u.PasswordHash, &u.EmailVerified, &u.CreatedAt, &u.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	return &u, nil
+}
+
+func (r *PURepository) GetBYId(id string) (*models.User, error) {
+	row := r.db.QueryRow(
+		`SELECT id, email, password_hash, email_verified, created_at, updated_at
+		FROM users WHERE id = $1`,
+		id,
+	)
+
+	var u models.User
+
 	err := row.Scan(&u.Id, &u.Email, &u.PasswordHash, &u.EmailVerified, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
