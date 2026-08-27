@@ -3,11 +3,13 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/Ashoke15/AuthX/internal/auth"
+	"github.com/Ashoke15/AuthX/internal/mailer"
 	"github.com/Ashoke15/AuthX/internal/models"
 	"github.com/Ashoke15/AuthX/internal/repository"
 	"github.com/Ashoke15/AuthX/internal/validation"
@@ -16,10 +18,12 @@ import (
 
 type RegisterHandeler struct {
 	repo repository.UserReposerty
+	verifyRepo repository.EmailVerificationRepo
+	mailer *mailer.SMTPMailer
 }
 
-func NewRegisterHandeler(repo repository.UserReposerty) *RegisterHandeler {
-	return &RegisterHandeler{repo: repo}
+func NewRegisterHandeler(repo repository.UserReposerty, verifyRepo repository.EmailVerificationRepo, mailer *mailer.SMTPMailer) *RegisterHandeler {
+	return &RegisterHandeler{repo: repo, verifyRepo: verifyRepo, mailer: mailer}
 }
 
 type registerRequest struct {
@@ -68,6 +72,28 @@ func (h *RegisterHandeler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusInternalServerError, "could not create user")
 		return
+	}
+
+	code, err := auth.GenerateOTP()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not generate verification code")
+		return
+	}
+
+	verification := &models.EmailVerification{
+		ID: uuid.NewString(),
+		UserId: user.Id,
+		CodeHash: auth.HashOTP(code),
+		ExpiresAt: time.Now().Add(auth.OTPTTL),
+	}
+
+	if err := h.verifyRepo.Create(verification); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not store verfication code")
+		return
+	}
+
+	if err := h.mailer.SendVerificationEmail(user.Email, code); err != nil {
+		log.Printf("sent verification emailto %s : %v", user.Email, err)
 	}
 
 	writeJson(w, http.StatusCreated, registerResponce{

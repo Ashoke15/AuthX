@@ -42,6 +42,16 @@ func migrate(conn *sql.DB) error {
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		revoked_at TIMESTAMPTZ
 	);
+
+	CREATE TABLE IF NOT EXISTS email_verifications (
+		id UUID PRIMARY KEY,
+		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		code_hash TEXT NOT NULL,
+		expires_at TIMESTAMPTZ NOT NULL,
+		attempts INT NOT NULL DEFAULT 0,
+		used_at TIMESTAMPTZ,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
 	`
 	_, err := conn.Exec(schema)
 	return err

@@ -70,6 +70,11 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !user.EmailVerified {
+		writeError(w, http.StatusForbidden, "please verifiy email before login")
+		return
+	}
+
 	token, err := auth.GenerateAccessToken(user.Id, h.JwtSecret)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not generate token")

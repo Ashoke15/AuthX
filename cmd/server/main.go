@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/Ashoke15/AuthX/internal/mailer"
 	authmw "github.com/Ashoke15/AuthX/internal/middleware"
 
 	"github.com/Ashoke15/AuthX/internal/config"
@@ -25,9 +26,16 @@ func main() {
 
 	userRepo := repository.NPURepository(conn)
 	refreshRepo := repository.NPRTRepositry(conn)
-	registerHandeler := handlers.NewRegisterHandeler(userRepo)
+	verifyRepo := repository.NewPGEVRepo(conn)
+	emailMailer, err := mailer.NewSmtpMailer(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, cfg.AppName)
+	if err != nil {
+		log.Fatalf("failed to load email templates: %v", err)
+	}
+
+	registerHandeler := handlers.NewRegisterHandeler(userRepo, verifyRepo, emailMailer)
 	loginHandler := handlers.NewLoginHandler(userRepo, refreshRepo, cfg.JWTSecret)
 	refreshHandler := handlers.NewRefreshHandeler(refreshRepo, cfg.JWTSecret)
+	verifyEmailHandler := handlers.NewVerifyEmailHandler(userRepo, verifyRepo)
 	meHandler := handlers.NewMeHandler(userRepo)
 
 	r := chi.NewRouter()
@@ -37,6 +45,7 @@ func main() {
 	r.Post("/register", registerHandeler.ServeHTTP)
 	r.Post("/login", loginHandler.ServeHTTP)
 	r.Post("/refresh", refreshHandler.ServeHTTP)
+	r.Post("/verify-email", verifyEmailHandler.ServeHTTP)
 
 	r.Group(func(protect chi.Router) {
 		protect.Use(authmw.RequireAuth(cfg.JWTSecret))
