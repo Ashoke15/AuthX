@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -46,6 +47,16 @@ func migrate(conn *sql.DB) error {
 	CREATE TABLE IF NOT EXISTS email_verifications (
 		id UUID PRIMARY KEY,
 		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		code_hash TEXT NOT NULL,
+		expires_at TIMESTAMPTZ NOT NULL,
+		attempts INT NOT NULL DEFAULT 0,
+		used_at TIMESTAMPTZ,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+
+	CREATE TABLE IF NOT EXISTS password_resets (
+		id UUID PRIMARY KEY,
+		user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		code_hash TEXT NOT NULL,
 		expires_at TIMESTAMPTZ NOT NULL,
 		attempts INT NOT NULL DEFAULT 0,

@@ -17,6 +17,7 @@ type UserReposerty interface {
 	Create(u *models.User) error
 	GetByEmail(email string) (*models.User, error)
 	GetBYId(id string) (*models.User, error)
+	UpdatePasswored(userId, passworedHash string) error
 }
 
 type PURepository struct {
@@ -82,6 +83,11 @@ func (r *PURepository) GetBYId(id string) (*models.User, error) {
 	}
 
 	return &u, nil
+}
+
+func (r *PURepository) UpdatePasswored(userId, passwordHash string) error {
+	_, err := r.db.Exec(`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`, passwordHash, userId)
+	return err
 }
 
 func isUniqueError(err error) bool {

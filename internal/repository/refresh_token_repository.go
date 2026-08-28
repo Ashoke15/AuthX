@@ -15,6 +15,7 @@ type RefreshTokenRepository interface {
 	Create(rt *models.RefreshToken) error
 	GetByHash(tokenHash string) (*models.RefreshToken, error)
 	Revoked(id string) error
+	RevokedAllByUserId(userID string) error
 }
 
 type PRTRepository struct {
@@ -57,5 +58,10 @@ func (r *PRTRepository) GetByHash(tokenHash string) (*models.RefreshToken, error
 func (r *PRTRepository) Revoked(id string) error {
 	_, err := r.db.Exec(`UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1`, id)
 
+	return err
+}
+
+func (r *PRTRepository) RevokedAllByUserId(userId string) error {
+	_, err := r.db.Exec(`UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`, userId)
 	return err
 }

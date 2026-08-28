@@ -27,6 +27,8 @@ func main() {
 	userRepo := repository.NPURepository(conn)
 	refreshRepo := repository.NPRTRepositry(conn)
 	verifyRepo := repository.NewPGEVRepo(conn)
+	resetRepo := repository.NPgPRRepo(conn)
+
 	emailMailer, err := mailer.NewSmtpMailer(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, cfg.AppName)
 	if err != nil {
 		log.Fatalf("failed to load email templates: %v", err)
@@ -36,6 +38,8 @@ func main() {
 	loginHandler := handlers.NewLoginHandler(userRepo, refreshRepo, cfg.JWTSecret)
 	refreshHandler := handlers.NewRefreshHandeler(refreshRepo, cfg.JWTSecret)
 	verifyEmailHandler := handlers.NewVerifyEmailHandler(userRepo, verifyRepo)
+	forgetpasswordHandler := handlers.NewForgetPasswordHandeler(userRepo, resetRepo, emailMailer)
+	resetPassworedHandeler := handlers.NewResetPasswordHander(userRepo, resetRepo, refreshRepo)
 	meHandler := handlers.NewMeHandler(userRepo)
 
 	r := chi.NewRouter()
@@ -46,6 +50,8 @@ func main() {
 	r.Post("/login", loginHandler.ServeHTTP)
 	r.Post("/refresh", refreshHandler.ServeHTTP)
 	r.Post("/verify-email", verifyEmailHandler.ServeHTTP)
+	r.Post("/forget-password", forgetpasswordHandler.ServeHTTP)
+	r.Post("/reset-password", resetPassworedHandeler.ServeHTTP)
 
 	r.Group(func(protect chi.Router) {
 		protect.Use(authmw.RequireAuth(cfg.JWTSecret))
