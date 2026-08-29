@@ -3,9 +3,12 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/Ashoke15/AuthX/internal/mailer"
 	authmw "github.com/Ashoke15/AuthX/internal/middleware"
+	"github.com/Ashoke15/AuthX/internal/ratelimit"
+	"golang.org/x/time/rate"
 
 	"github.com/Ashoke15/AuthX/internal/config"
 	"github.com/Ashoke15/AuthX/internal/db"
@@ -34,11 +37,15 @@ func main() {
 		log.Fatalf("failed to load email templates: %v", err)
 	}
 
+	iplimiter := ratelimit.New(rate.Every(time.Second), 10, 10*time.Minute)
+	loginEmailLimiter := ratelimit.New(rate.Every(time.Minute), 5, 30*time.Minute)
+	resetEmailLimiter := ratelimit.New(rate.Every(2*time.Minute), 3, 30*time.Minute)
+
 	registerHandeler := handlers.NewRegisterHandeler(userRepo, verifyRepo, emailMailer)
-	loginHandler := handlers.NewLoginHandler(userRepo, refreshRepo, cfg.JWTSecret)
+	loginHandler := handlers.NewLoginHandler(userRepo, refreshRepo, cfg.JWTSecret, loginEmailLimiter)
 	refreshHandler := handlers.NewRefreshHandeler(refreshRepo, cfg.JWTSecret)
 	verifyEmailHandler := handlers.NewVerifyEmailHandler(userRepo, verifyRepo)
-	forgetpasswordHandler := handlers.NewForgetPasswordHandeler(userRepo, resetRepo, emailMailer)
+	forgetpasswordHandler := handlers.NewForgetPasswordHandeler(userRepo, resetRepo, emailMailer, resetEmailLimiter)
 	resetPassworedHandeler := handlers.NewResetPasswordHander(userRepo, resetRepo, refreshRepo)
 	meHandler := handlers.NewMeHandler(userRepo)
 
@@ -46,12 +53,15 @@ func main() {
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 
-	r.Post("/register", registerHandeler.ServeHTTP)
-	r.Post("/login", loginHandler.ServeHTTP)
-	r.Post("/refresh", refreshHandler.ServeHTTP)
-	r.Post("/verify-email", verifyEmailHandler.ServeHTTP)
-	r.Post("/forget-password", forgetpasswordHandler.ServeHTTP)
-	r.Post("/reset-password", resetPassworedHandeler.ServeHTTP)
+	r.Group(func(public chi.Router) {
+		public.Use(authmw.RateLimitByIP(iplimiter))
+		public.Post("/register", registerHandeler.ServeHTTP)
+		public.Post("/login", loginHandler.ServeHTTP)
+		public.Post("/refresh", refreshHandler.ServeHTTP)
+		public.Post("/verify-email", verifyEmailHandler.ServeHTTP)
+		public.Post("/forget-password", forgetpasswordHandler.ServeHTTP)
+		public.Post("/reset-password", resetPassworedHandeler.ServeHTTP)
+	})
 
 	r.Group(func(protect chi.Router) {
 		protect.Use(authmw.RequireAuth(cfg.JWTSecret))

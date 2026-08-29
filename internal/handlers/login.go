@@ -9,6 +9,7 @@ import (
 
 	"github.com/Ashoke15/AuthX/internal/auth"
 	"github.com/Ashoke15/AuthX/internal/models"
+	"github.com/Ashoke15/AuthX/internal/ratelimit"
 	"github.com/Ashoke15/AuthX/internal/repository"
 	"github.com/Ashoke15/AuthX/internal/validation"
 	"github.com/google/uuid"
@@ -18,10 +19,11 @@ type LoginHandler struct {
 	userRepo    repository.UserReposerty
 	refreshRepo repository.RefreshTokenRepository
 	JwtSecret   string
+	emailLimiter *ratelimit.Limiter
 }
 
-func NewLoginHandler(repo repository.UserReposerty, refreshRepo repository.RefreshTokenRepository, jwtSecret string) *LoginHandler {
-	return &LoginHandler{userRepo: repo, refreshRepo: refreshRepo, JwtSecret: jwtSecret}
+func NewLoginHandler(repo repository.UserReposerty, refreshRepo repository.RefreshTokenRepository, jwtSecret string, emailLimiter *ratelimit.Limiter) *LoginHandler {
+	return &LoginHandler{userRepo: repo, refreshRepo: refreshRepo, JwtSecret: jwtSecret, emailLimiter: emailLimiter}
 }
 
 type loginRequest struct {
@@ -47,6 +49,11 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if err := validation.ValidateEmail(req.Email); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if !h.emailLimiter.Allow(req.Email) {
+		writeError(w, http.StatusTooManyRequests, "too many login attempts, please try again later")
 		return
 	}
 

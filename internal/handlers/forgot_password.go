@@ -9,6 +9,7 @@ import (
 	"github.com/Ashoke15/AuthX/internal/auth"
 	"github.com/Ashoke15/AuthX/internal/mailer"
 	"github.com/Ashoke15/AuthX/internal/models"
+	"github.com/Ashoke15/AuthX/internal/ratelimit"
 	"github.com/Ashoke15/AuthX/internal/repository"
 	"github.com/Ashoke15/AuthX/internal/validation"
 	"github.com/google/uuid"
@@ -18,10 +19,11 @@ type ForgetPasswordHandler struct {
 	userRepo  repository.UserReposerty
 	resetRepo repository.PRRepo
 	mailer    mailer.Mailer
+	emailLimit *ratelimit.Limiter
 }
 
-func NewForgetPasswordHandeler(userRepo repository.UserReposerty, resetRepo repository.PRRepo, m mailer.Mailer) *ForgetPasswordHandler {
-	return &ForgetPasswordHandler{userRepo: userRepo, resetRepo: resetRepo, mailer: m}
+func NewForgetPasswordHandeler(userRepo repository.UserReposerty, resetRepo repository.PRRepo, m mailer.Mailer, emailLimit *ratelimit.Limiter) *ForgetPasswordHandler {
+	return &ForgetPasswordHandler{userRepo: userRepo, resetRepo: resetRepo, mailer: m, emailLimit: emailLimit}
 }
 
 type forgetpasswordRequest struct {
@@ -38,6 +40,11 @@ func (h *ForgetPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 
 	if err := validation.ValidateEmail(req.Email); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if !h.emailLimit.Allow(req.Email) {
+		writeError(w, http.StatusTooManyRequests, "too many request, please try again later")
 		return
 	}
 
