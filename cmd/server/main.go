@@ -38,7 +38,7 @@ func main() {
 	}
 
 	iplimiter := ratelimit.New(rate.Every(time.Second), 10, 10*time.Minute)
-	loginEmailLimiter := ratelimit.New(rate.Every(time.Minute), 5, 30*time.Minute)
+	loginEmailLimiter := ratelimit.New(rate.Every(time.Minute), 10, 30*time.Minute)
 	resetEmailLimiter := ratelimit.New(rate.Every(2*time.Minute), 3, 30*time.Minute)
 
 	registerHandeler := handlers.NewRegisterHandeler(userRepo, verifyRepo, emailMailer)

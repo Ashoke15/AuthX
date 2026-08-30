@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -72,7 +73,32 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if user.LockedUntil != nil {
+		if time.Now().Before(*user.LockedUntil) {
+			writeError(w, http.StatusLocked, "account temporarily locked due to too many failed attempts, try again leter")
+			return
+		}
+
+		if err := h.userRepo.ResetFailedAttempts(user.Id); err != nil {
+			log.Printf("failed to clear expaire log for %s: %v", user.Email, err)
+		}
+	}
+
 	if !auth.CheckPassword(user.PasswordHash, req.Password) {
+		attempts, incErr := h.userRepo.IncrementFailedAttempts(user.Id)
+		if incErr != nil {
+			log.Printf("failed to record failed login attempts for %s:%v", user.Email, incErr)
+		}
+
+		if attempts >= auth.MaxFailedLoginAttempts {
+			lockUntil := time.Now().Add(auth.LockOutDuration)
+
+			if lockErr := h.userRepo.LockAccount(user.Id, lockUntil); lockErr != nil {
+				log.Printf("failed to log account %s: %v", user.Email, lockErr)
+			}
+			writeError(w, http.StatusLocked, "too many failed attempts account log for 15 minutes")
+			return
+		}
 		writeError(w, http.StatusUnauthorized, "invalid email and password")
 		return
 	}
