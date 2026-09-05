@@ -8,6 +8,7 @@ import (
 	"github.com/Ashoke15/AuthX/internal/mailer"
 	authmw "github.com/Ashoke15/AuthX/internal/middleware"
 	"github.com/Ashoke15/AuthX/internal/ratelimit"
+	"github.com/Ashoke15/AuthX/internal/sms"
 	"golang.org/x/time/rate"
 
 	"github.com/Ashoke15/AuthX/internal/config"
@@ -31,10 +32,21 @@ func main() {
 	refreshRepo := repository.NPRTRepositry(conn)
 	verifyRepo := repository.NewPGEVRepo(conn)
 	resetRepo := repository.NPgPRRepo(conn)
+	phoneRepo := repository.NewPGPVRepo(conn)
 
 	emailMailer, err := mailer.NewSmtpMailer(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, cfg.AppName)
 	if err != nil {
 		log.Fatalf("failed to load email templates: %v", err)
+	}
+
+	var smsSender sms.Sender
+	switch cfg.SMSProvider {
+	case "msg91":
+		smsSender = sms.NewMSG91Sender(cfg.MSG91AuthKey, cfg.MSG91FlowId, cfg.MSG91SenderId)
+	case "twilio":
+		smsSender = sms.NewTwilioSender(cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber)
+	default:
+		smsSender = sms.NewConsolSender()
 	}
 
 	iplimiter := ratelimit.New(rate.Every(time.Second), 10, 10*time.Minute)
@@ -49,6 +61,8 @@ func main() {
 	resetPassworedHandeler := handlers.NewResetPasswordHander(userRepo, resetRepo, refreshRepo)
 	meHandler := handlers.NewMeHandler(userRepo)
 	logoutHandler := handlers.NewLogoutHandler(refreshRepo)
+	sendPhoneOTPHandler := handlers.NewSentPhoneOTPHandler(userRepo, phoneRepo, smsSender)
+	verifyPhoneOTPHandler := handlers.NewVerifyPhoneOTPHandler(userRepo, phoneRepo)
 
 	r := chi.NewRouter()
 	r.Use(chimw.Logger)
@@ -68,6 +82,8 @@ func main() {
 	r.Group(func(protect chi.Router) {
 		protect.Use(authmw.RequireAuth(cfg.JWTSecret))
 		protect.Get("/me", meHandler.ServeHTTP)
+		protect.Post("/phone/send-otp", sendPhoneOTPHandler.ServeHTTP)
+		protect.Post("/phone/verify-otp", verifyPhoneOTPHandler.ServeHTTP)
 	})
 
 	log.Printf("auth-service listening on :%s", cfg.Port)

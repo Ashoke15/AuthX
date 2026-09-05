@@ -11,6 +11,7 @@ import (
 
 var (
 	ErrEmailTaken   = errors.New("email alredy registerd")
+	ErrPhoneTaken   = errors.New("phone number alredy registerd")
 	ErrUserNotFound = errors.New("user not found")
 )
 
@@ -22,6 +23,8 @@ type UserReposerty interface {
 	IncrementFailedAttempts(userId string) (int, error)
 	LockAccount(userId string, until time.Time) error
 	ResetFailedAttempts(userId string) error
+	SetPhone(userId, phone string) error
+	VerifyPhone(userId string) error
 }
 
 type PURepository struct {
@@ -52,33 +55,28 @@ func (r *PURepository) Create(u *models.User) error {
 
 func (r *PURepository) GetByEmail(email string) (*models.User, error) {
 	row := r.db.QueryRow(
-		`SELECT id, email, password_hash, email_verified, failed_login_attempts, locked_until, created_at, updated_at
+		`SELECT id, email, password_hash, email_verified, phone, phone_verified, failed_login_attempts, locked_until, created_at, updated_at
 		FROM users WHERE email = $1`,
 		email,
 	)
 
-	var u models.User
-	err := row.Scan(&u.Id, &u.Email, &u.PasswordHash, &u.EmailVerified, &u.FailedLoginAttempts, &u.LockedUntil, &u.CreatedAt, &u.UpdatedAt)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrUserNotFound
-		}
-		return nil, err
-	}
-
-	return &u, nil
+	return scanRow(row)
 }
 
 func (r *PURepository) GetBYId(id string) (*models.User, error) {
 	row := r.db.QueryRow(
-		`SELECT id, email, password_hash, email_verified, failed_login_attempts, locked_until, created_at, updated_at
+		`SELECT id, email, password_hash, email_verified, phone, phone_verified, failed_login_attempts, locked_until, created_at, updated_at
 		FROM users WHERE id = $1`,
 		id,
 	)
 
+	return scanRow(row)
+}
+
+func scanRow(row *sql.Row) (*models.User, error) {
 	var u models.User
 
-	err := row.Scan(&u.Id, &u.Email, &u.PasswordHash, &u.EmailVerified, &u.FailedLoginAttempts, &u.LockedUntil, &u.CreatedAt, &u.UpdatedAt)
+	err := row.Scan(&u.Id, &u.Email, &u.PasswordHash, &u.EmailVerified, &u.Phone, &u.PhoneVerified, &u.FailedLoginAttempts, &u.LockedUntil, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrUserNotFound
@@ -115,6 +113,22 @@ func (r *PURepository) LockAccount(userId string, until time.Time) error {
 func (r *PURepository) ResetFailedAttempts(userId string) error {
 	_, err := r.db.Exec(`UPDATE users SET failed_login_attempts = 0, locked_until = NULL, updated_at = NOW() WHERE id = $1`, userId)
 
+	return err
+}
+
+func (r *PURepository) SetPhone(userId, phone string) error {
+	_, err := r.db.Exec(`UPDATE users SET phone = $1, phone_verified = FALSE, updated_at = NOW() WHERE id = $2`, phone, userId)
+	if err != nil {
+		if isUniqueError(err) {
+			return ErrPhoneTaken
+		}
+		return err
+	}
+	return nil
+}
+
+func (r *PURepository) VerifyPhone(userId string) error {
+	_, err := r.db.Exec(`UPDATE users SET phone_verified = TRUE , updated_at = NOW() WHERE id = $1`, userId)
 	return err
 }
 

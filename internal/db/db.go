@@ -32,11 +32,13 @@ func migrate(conn *sql.DB) error {
 		password_hash TEXT NOT NULL,
 		email_verified BOOLEAN NOT NULL DEFAULT FALSE,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		failed_login_attempts INT NOT NULL DEFAULT 0,
+		locked_until TIMESTAMPTZ
 	);
 
-	ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INT NOT NULL DEFAULT 0;
-	ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT UNIQUE;
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAULT FALSE;
 	
 	CREATE TABLE IF NOT EXISTS refresh_tokens (
 		id UUID PRIMARY KEY,
@@ -60,6 +62,16 @@ func migrate(conn *sql.DB) error {
 	CREATE TABLE IF NOT EXISTS password_resets (
 		id UUID PRIMARY KEY,
 		user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		code_hash TEXT NOT NULL,
+		expires_at TIMESTAMPTZ NOT NULL,
+		attempts INT NOT NULL DEFAULT 0,
+		used_at TIMESTAMPTZ,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+
+	CREATE TABLE IF NOT EXISTS phone_verifications (
+		id UUID PRIMARY KEY,
+		user_id UUID NOT NULL REFERENCES users(id) on DELETE CASCADE,
 		code_hash TEXT NOT NULL,
 		expires_at TIMESTAMPTZ NOT NULL,
 		attempts INT NOT NULL DEFAULT 0,
